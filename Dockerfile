@@ -15,4 +15,6 @@ RUN export USE_XVFB=yes \
     && export WINEARCH=win32 \
     && export RUN_AS_ROOT=yes \
     && entrypoint wineboot --init \
-    && winetricks --unattended --force cmd dotnet20 dotnet462
+    && winetricks --unattended --force cmd dotnet20 dotnet472 \
+    && while pgrep wineserver >/dev/null; do echo "Waiting for wineserver"; sleep 1; done \
+    && rm -rf $HOME/.cache/winetricks
