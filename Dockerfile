@@ -1,5 +1,7 @@
 FROM scottyhardy/docker-wine
 
+ENV WINEDEBUG "fixme-all"
+
 #RUN export DISPLAY=:0 \
 #    && (Xvfb $DISPLAY -screen 0 1024x768x24 > /dev/null 2>&1 &) \
 #    && wine wineboot --init \
