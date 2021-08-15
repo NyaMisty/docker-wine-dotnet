@@ -15,20 +15,22 @@ jobs:
       - name: Branch name
         id: branch_name
         run: |
+          echo "Cur ref: $GITHUB_REF"
+          export SOURCE_NAME=${GITHUB_REF#refs/*/}
+          export SOURCE_BRANCH=${GITHUB_REF#refs/heads/}
+          export SOURCE_TAG=${GITHUB_REF#refs/tags/}
+          echo "Parsed: name=$SOURCE_NAME, branch=$SOURCE_BRANCH, tag=$SOURCE_TAG"
           echo ::set-output name=SOURCE_NAME::${GITHUB_REF#refs/*/}
           echo ::set-output name=SOURCE_BRANCH::${GITHUB_REF#refs/heads/}
           echo ::set-output name=SOURCE_TAG::${GITHUB_REF#refs/tags/}
-          if [[ "$SOURCE_NAME" != "" ]]; then
-            if [[ "$SOURCE_TAG" != "" ]]; then
-              echo ::set-output name=DOCKER_TAG::$SOURCE_TAG
-            elif [[ "$SOURCE_BRANCH" == "master" ]]; then
-              echo ::set-output name=DOCKER_TAG::latest
-            else
-              echo ::set-output name=DOCKER_TAG::$SOURCE_BRANCH
+          DOCKER_TAG="latest"
+          if [[ "$SOURCE_NAME" != "$GITHUB_REF" ]]; then
+            if [[ "$SOURCE_NAME" != "master" ]]; then
+              DOCKER_TAG="$SOURCE_NAME"
             fi
-          else
-            echo ::set-output name=DOCKER_TAG::latest
           fi
+          echo "Final Docker Tag: $DOCKER_TAG"
+          echo ::set-output name=DOCKER_TAG::$DOCKER_TAG
       -       
         name: Set up Docker Buildx
         id: buildx
