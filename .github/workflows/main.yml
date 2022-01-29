@@ -15,6 +15,9 @@ jobs:
         wine_branch:
           - stable
           - devel
+        wine_arch:
+          - win32
+          - win64
     steps:
       - 
         name: Checkout
@@ -66,16 +69,17 @@ jobs:
         uses: haya14busa/action-cond@v1
         id: tags
         with:
-          cond: ${{ matrix.wine_branch == 'stable' }}
+          cond: ${{ matrix.wine_branch == 'stable' && matrix.wine_arch == 'win32' }}
           if_true:
-            nyamisty/docker-wine-dotnet:latest,
-            nyamisty/docker-wine-dotnet:${{ matrix.wine_branch }},
-            nyamisty/docker-wine-dotnet:${{ matrix.wine_branch }}-${{ steps.wine_ver.outputs.value }},
-            nyamisty/docker-wine-dotnet:${{ matrix.wine_branch }}-${{ steps.wine_ver.outputs.value }}-${{ steps.timestamp.outputs.value }}
+            nyamisty/docker-wine-dotnet:${{ matrix.wine_arch }},
+            nyamisty/docker-wine-dotnet:${{ matrix.wine_arch }}-${{ matrix.wine_branch }},
+            nyamisty/docker-wine-dotnet:${{ matrix.wine_arch }}-${{ matrix.wine_branch }}-${{ steps.wine_ver.outputs.value }},
+            nyamisty/docker-wine-dotnet:${{ matrix.wine_arch }}-${{ matrix.wine_branch }}-${{ steps.wine_ver.outputs.value }}-${{ steps.timestamp.outputs.value }}
           if_false:
-            nyamisty/docker-wine-dotnet:${{ matrix.wine_branch }},
-            nyamisty/docker-wine-dotnet:${{ matrix.wine_branch }}-${{ steps.wine_ver.outputs.value }},
-            nyamisty/docker-wine-dotnet:${{ matrix.wine_branch }}-${{ steps.wine_ver.outputs.value }}-${{ steps.timestamp.outputs.value }}
+            nyamisty/docker-wine-dotnet:${{ matrix.wine_arch }},
+            nyamisty/docker-wine-dotnet:${{ matrix.wine_arch }}-${{ matrix.wine_branch }},
+            nyamisty/docker-wine-dotnet:${{ matrix.wine_arch }}-${{ matrix.wine_branch }}-${{ steps.wine_ver.outputs.value }},
+            nyamisty/docker-wine-dotnet:${{ matrix.wine_arch }}-${{ matrix.wine_branch }}-${{ steps.wine_ver.outputs.value }}-${{ steps.timestamp.outputs.value }}
       -       
         name: Set up Docker Buildx
         id: buildx
@@ -100,6 +104,7 @@ jobs:
         with:
           build-args: |
             WINE_BRANCH=${{ matrix.wine_branch }}
+            WINE_ARCH=${{ matrix.wine_arch }}
           context: ./ 
           file: ./Dockerfile
           builder: ${{ steps.buildx.outputs.name }}

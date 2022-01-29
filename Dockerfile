@@ -1,5 +1,7 @@
-ARG WINE_BRANCH="stable"
+ARG WINE_BRANCH "stable"
 FROM scottyhardy/docker-wine:${WINE_BRANCH}
+
+ARG WINE_ARCH "win32"
 
 ENV WINEDEBUG "fixme-all"
 
@@ -9,6 +11,7 @@ ENV XVFB_SERVER ":95"
 ENV XVFB_SCREEN "0"
 ENV XVFB_RESOLUTION "1024x768x8"
 ENV DISPLAY ":95"
+ENV WINEARCH $WINE_ARCH
 
 #RUN export DISPLAY=:0 \
 #    && (Xvfb $DISPLAY -screen 0 1024x768x24 > /dev/null 2>&1 &) \
@@ -17,20 +20,10 @@ ENV DISPLAY ":95"
 #    && while pgrep wineserver >/dev/null; do echo "Waiting for wineserver"; sleep 1; done \
 #    && rm -rf $HOME/.cache/winetricks
 
-RUN set +x \
-    && export WINEARCH=win32 \
-    && export WINEPREFIX="$(realpath ~/.wine32)" \
-    && entrypoint wineboot --init \
-    && winetricks --unattended --force cmd dotnet20 dotnet472 corefonts \
-    && while pgrep wineserver >/dev/null; do echo "Waiting for wineserver"; sleep 1; done \
-    && rm -rf $HOME/.cache/winetricks
-
-RUN set +x \
-    && export WINEARCH=win64 \
-    && export WINEPREFIX="$(realpath ~/.wine64)" \
-    && entrypoint wineboot --init \
-    && winetricks --unattended --force cmd dotnet20 dotnet472 corefonts \
-    && while pgrep wineserver >/dev/null; do echo "Waiting for wineserver"; sleep 1; done \
-    && rm -rf $HOME/.cache/winetricks
+RUN set -x -e; \
+    entrypoint wineboot --init; \
+    winetricks --unattended --force cmd dotnet20 dotnet472 corefonts; \
+    while pgrep wineserver >/dev/null; do echo "Waiting for wineserver"; sleep 1; done; \
+    rm -rf $HOME/.cache/winetricks
 
 RUN ln -s ~/.wine32 ~/.wine
