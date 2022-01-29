@@ -4,33 +4,78 @@ on:
   push:
     #tags:
     #  - "*"
-jobs:
+  schedule:
+    - cron: '0 3 * * MON'
 
+jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        wine_branch:
+          - stable
+          - devel
     steps:
       - 
         name: Checkout
         uses: actions/checkout@v2
-      - name: Branch name
-        id: branch_name
+      #- name: Branch name
+      #  id: branch_name
+      #  run: |
+      #    echo "Cur ref: $GITHUB_REF"
+      #    export SOURCE_NAME=${GITHUB_REF#refs/*/}
+      #    export SOURCE_BRANCH=${GITHUB_REF#refs/heads/}
+      #    export SOURCE_TAG=${GITHUB_REF#refs/tags/}
+      #    echo "Parsed: name=$SOURCE_NAME, branch=$SOURCE_BRANCH, tag=$SOURCE_TAG"
+      #    echo ::set-output name=SOURCE_NAME::${GITHUB_REF#refs/*/}
+      #    echo ::set-output name=SOURCE_BRANCH::${GITHUB_REF#refs/heads/}
+      #    echo ::set-output name=SOURCE_TAG::${GITHUB_REF#refs/tags/}
+      #    DOCKER_TAG="latest"
+      #    if [[ "$SOURCE_NAME" != "$GITHUB_REF" ]]; then
+      #      if [[ "$SOURCE_NAME" != "master" ]]; then
+      #        DOCKER_TAG="$SOURCE_NAME"
+      #      fi
+      #    fi
+      #    echo "Final Docker Tag: $DOCKER_TAG"
+      #    echo ::set-output name=DOCKER_TAG::$DOCKER_TAG
+
+      # copied from docker-wine
+      -
+        name: Extract wine version
+        id: wine_ver
+        env:
+          WINE_BRANCH: ${{ matrix.wine_branch }}
         run: |
-          echo "Cur ref: $GITHUB_REF"
-          export SOURCE_NAME=${GITHUB_REF#refs/*/}
-          export SOURCE_BRANCH=${GITHUB_REF#refs/heads/}
-          export SOURCE_TAG=${GITHUB_REF#refs/tags/}
-          echo "Parsed: name=$SOURCE_NAME, branch=$SOURCE_BRANCH, tag=$SOURCE_TAG"
-          echo ::set-output name=SOURCE_NAME::${GITHUB_REF#refs/*/}
-          echo ::set-output name=SOURCE_BRANCH::${GITHUB_REF#refs/heads/}
-          echo ::set-output name=SOURCE_TAG::${GITHUB_REF#refs/tags/}
-          DOCKER_TAG="latest"
-          if [[ "$SOURCE_NAME" != "$GITHUB_REF" ]]; then
-            if [[ "$SOURCE_NAME" != "master" ]]; then
-              DOCKER_TAG="$SOURCE_NAME"
-            fi
+          WINE_VER="$(docker run --rm scottyhardy/docker-wine:$WINE_BRANCH /bin/bash -c "wine --version | sed -E 's/^wine-//'")"
+          if echo "${WINE_VER}" | grep -q -E "^[0-9]+(\.[0-9]+)+(-\S+)*$"; then
+              echo "Found wine version '${WINE_VER}'"
+              echo "::set-output name=value::${WINE_VER}"
+          else
+              echo "ERROR: Unable to determine wine version"
+              exit 1
           fi
-          echo "Final Docker Tag: $DOCKER_TAG"
-          echo ::set-output name=DOCKER_TAG::$DOCKER_TAG
+      -
+        name: Generate timestamp
+        id: timestamp
+        run: |
+          TIMESTAMP="$(date +"%Y%m%d")"
+          echo "Timestamp: ${TIMESTAMP}"
+          echo "::set-output name=value::${TIMESTAMP}"
+      -
+        name: Determine tags
+        uses: haya14busa/action-cond@v1
+        id: tags
+        with:
+          cond: ${{ matrix.wine_branch == 'stable' }}
+          if_true:
+            nyamisty/docker-wine-dotnet:latest,
+            nyamisty/docker-wine-dotnet:${{ matrix.wine_branch }},
+            nyamisty/docker-wine-dotnet:${{ matrix.wine_branch }}-${{ steps.wine_ver.outputs.value }},
+            nyamisty/docker-wine-dotnet:${{ matrix.wine_branch }}-${{ steps.wine_ver.outputs.value }}-${{ steps.timestamp.outputs.value }}
+          if_false:
+            nyamisty/docker-wine-dotnet:${{ matrix.wine_branch }},
+            nyamisty/docker-wine-dotnet:${{ matrix.wine_branch }}-${{ steps.wine_ver.outputs.value }},
+            nyamisty/docker-wine-dotnet:${{ matrix.wine_branch }}-${{ steps.wine_ver.outputs.value }}-${{ steps.timestamp.outputs.value }}
       -       
         name: Set up Docker Buildx
         id: buildx
@@ -53,13 +98,17 @@ jobs:
         id: docker_build
         uses: docker/build-push-action@v2
         with:
+          build-args: |
+            WINE_BRANCH=${{ matrix.wine_branch }}
           context: ./ 
           file: ./Dockerfile
           builder: ${{ steps.buildx.outputs.name }}
           push: true
-          tags: nyamisty/docker-wine-dotnet:${{ steps.branch_name.outputs.DOCKER_TAG }}
-          cache-from: type=local,src=/tmp/.buildx-cache
-          cache-to: type=local,dest=/tmp/.buildx-cache
+          tags: ${{ steps.tags.outputs.value }}
+          #cache-from: type=local,src=/tmp/.buildx-cache
+          #cache-to: type=local,dest=/tmp/.buildx-cache
       -
         name: Image digest
         run: echo ${{ steps.docker_build.outputs.digest }}
+
+      - uses: gautamkrishnar/keepalive-workflow@master # using the workflow with default settings

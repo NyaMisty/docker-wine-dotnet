@@ -1,4 +1,5 @@
-FROM scottyhardy/docker-wine
+ARG WINE_BRANCH="stable"
+FROM scottyhardy/docker-wine:${WINE_BRANCH}
 
 ENV WINEDEBUG "fixme-all"
 
