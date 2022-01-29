@@ -17,7 +17,7 @@ ENV DISPLAY ":95"
 #    && while pgrep wineserver >/dev/null; do echo "Waiting for wineserver"; sleep 1; done \
 #    && rm -rf $HOME/.cache/winetricks
 
-RUN true \
+RUN set +x \
     && export WINEARCH=win32 \
     && export WINEPREFIX="$(realpath ~/.wine32)" \
     && entrypoint wineboot --init \
@@ -25,7 +25,7 @@ RUN true \
     && while pgrep wineserver >/dev/null; do echo "Waiting for wineserver"; sleep 1; done \
     && rm -rf $HOME/.cache/winetricks
 
-RUN true \
+RUN set +x \
     && export WINEARCH=win64 \
     && export WINEPREFIX="$(realpath ~/.wine64)" \
     && entrypoint wineboot --init \
