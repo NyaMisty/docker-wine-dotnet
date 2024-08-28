@@ -109,9 +109,30 @@ jobs:
           file: ./Dockerfile
           builder: ${{ steps.buildx.outputs.name }}
           push: true
+          load: true
           tags: ${{ steps.tags.outputs.value }}
           #cache-from: type=local,src=/tmp/.buildx-cache
           #cache-to: type=local,dest=/tmp/.buildx-cache
+
+      - 
+        name: Unexpose ports
+        run: |
+          set -x
+          sudo mkdir /mnt/tmpdir
+          sudo chmod -R 777 /mnt/tmpdir
+          cd /mnt/tmpdir
+          pip3 install docker-copyedit
+          srcTag=nyamisty/docker-wine-dotnet:${{ matrix.wine_arch }}-${{ matrix.wine_branch }}-${{ steps.wine_ver.outputs.value }}-${{ steps.timestamp.outputs.value }}
+          dstTag=nyamisty/docker-wine-dotnet:${{ matrix.wine_arch }}-${{ matrix.wine_branch }}-${{ steps.wine_ver.outputs.value }}-${{ steps.timestamp.outputs.value }}-noports
+          docker-copyedit.py FROM $srcTag INTO $dstTag -vv remove all ports
+          docker tag $dstTag nyamisty/docker-wine-dotnet:${{ matrix.wine_arch }}-noports
+          docker tag $dstTag nyamisty/docker-wine-dotnet:${{ matrix.wine_arch }}-${{ matrix.wine_branch }}-noports
+          docker tag $dstTag nyamisty/docker-wine-dotnet:${{ matrix.wine_arch }}-${{ matrix.wine_branch }}-${{ steps.wine_ver.outputs.value }}-noports
+          docker push $dstTag
+          docker push nyamisty/docker-wine-dotnet:${{ matrix.wine_arch }}-noports
+          docker push nyamisty/docker-wine-dotnet:${{ matrix.wine_arch }}-${{ matrix.wine_branch }}-noports
+          docker push nyamisty/docker-wine-dotnet:${{ matrix.wine_arch }}-${{ matrix.wine_branch }}-${{ steps.wine_ver.outputs.value }}-noports
+
       -
         name: Image digest
         run: echo ${{ steps.docker_build.outputs.digest }}
