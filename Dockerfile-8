@@ -1,7 +1,7 @@
-ARG WINE_BRANCH "stable"
+ARG WINE_BRANCH="stable"
 FROM scottyhardy/docker-wine:${WINE_BRANCH}
 
-ARG WINE_ARCH "win32"
+ARG WINE_ARCH="win64"
 
 ENV WINEDEBUG "fixme-all"
 
@@ -23,7 +23,7 @@ ENV WINEARCH $WINE_ARCH
 RUN set -x -e; \
     entrypoint wineboot --init; \
     while true; do \
-      if timeout 30m winetricks --unattended --force cmd dotnet20 dotnet472 corefonts; then \
+      if timeout 30m winetricks --unattended --force cmd dotnet8 corefonts; then \
         break; \
       fi \
     done; \

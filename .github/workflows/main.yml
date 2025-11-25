@@ -1,4 +1,4 @@
-name: CI to Docker Hub 
+name: CI to Docker Hub
 
 on:
   push:
@@ -11,17 +11,30 @@ on:
 permissions:
   actions: write
 
+env:
+  # DEBUG: "true"
+  DEBUG: ""
+
 jobs:
   build:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
+        dotnet_version:
+          - 4
+          - 8
         wine_branch:
           - stable
           - devel
         wine_arch:
           - win32
           - win64
+        exclude:
+          - dotnet_version: 8
+            wine_arch: win32
+          - dotnet_version: 9
+            wine_arch: win32
     steps:
       - 
         name: Checkout
@@ -69,21 +82,31 @@ jobs:
           echo "Timestamp: ${TIMESTAMP}"
           echo "::set-output name=value::${TIMESTAMP}"
       -
+        name: Determine repo
+        uses: haya14busa/action-cond@v1
+        id: repo
+        with:
+          cond: ${{ matrix.dotnet_version == '4' }}
+          if_true:
+            nyamisty/docker-wine-dotnet
+          if_false:
+            nyamisty/docker-wine-dotnet-${{ matrix.dotnet_version }}
+      -
         name: Determine tags
         uses: haya14busa/action-cond@v1
         id: tags
         with:
-          cond: ${{ matrix.wine_branch == 'stable' && matrix.wine_arch == 'win32' }}
+          cond: ${{ matrix.dotnet_version == '4' }}
           if_true:
-            nyamisty/docker-wine-dotnet:${{ matrix.wine_arch }},
-            nyamisty/docker-wine-dotnet:${{ matrix.wine_arch }}-${{ matrix.wine_branch }},
-            nyamisty/docker-wine-dotnet:${{ matrix.wine_arch }}-${{ matrix.wine_branch }}-${{ steps.wine_ver.outputs.value }},
-            nyamisty/docker-wine-dotnet:${{ matrix.wine_arch }}-${{ matrix.wine_branch }}-${{ steps.wine_ver.outputs.value }}-${{ steps.timestamp.outputs.value }}
-          if_false:
-            nyamisty/docker-wine-dotnet:${{ matrix.wine_arch }},
-            nyamisty/docker-wine-dotnet:${{ matrix.wine_arch }}-${{ matrix.wine_branch }},
-            nyamisty/docker-wine-dotnet:${{ matrix.wine_arch }}-${{ matrix.wine_branch }}-${{ steps.wine_ver.outputs.value }},
-            nyamisty/docker-wine-dotnet:${{ matrix.wine_arch }}-${{ matrix.wine_branch }}-${{ steps.wine_ver.outputs.value }}-${{ steps.timestamp.outputs.value }}
+            ${{ steps.repo.outputs.value }}:${{ matrix.wine_arch }},
+            ${{ steps.repo.outputs.value }}:${{ matrix.wine_arch }}-${{ matrix.wine_branch }},
+            ${{ steps.repo.outputs.value }}:${{ matrix.wine_arch }}-${{ matrix.wine_branch }}-${{ steps.wine_ver.outputs.value }},
+            ${{ steps.repo.outputs.value }}:${{ matrix.wine_arch }}-${{ matrix.wine_branch }}-${{ steps.wine_ver.outputs.value }}-${{ steps.timestamp.outputs.value }}
+          if_false: # For now we keep same format for both 4.x and 8.x
+            ${{ steps.repo.outputs.value }}:${{ matrix.wine_arch }},
+            ${{ steps.repo.outputs.value }}:${{ matrix.wine_arch }}-${{ matrix.wine_branch }},
+            ${{ steps.repo.outputs.value }}:${{ matrix.wine_arch }}-${{ matrix.wine_branch }}-${{ steps.wine_ver.outputs.value }},
+            ${{ steps.repo.outputs.value }}:${{ matrix.wine_arch }}-${{ matrix.wine_branch }}-${{ steps.wine_ver.outputs.value }}-${{ steps.timestamp.outputs.value }}
       -       
         name: Set up Docker Buildx
         id: buildx
@@ -109,10 +132,10 @@ jobs:
           build-args: |
             WINE_BRANCH=${{ matrix.wine_branch }}
             WINE_ARCH=${{ matrix.wine_arch }}
-          context: ./ 
-          file: ./Dockerfile
+          context: ./
+          file: ./Dockerfile-${{ matrix.dotnet_version }}
           builder: ${{ steps.buildx.outputs.name }}
-          push: true
+          push: ${{ env.DEBUG == '' }}
           load: true
           tags: ${{ steps.tags.outputs.value }}
           #cache-from: type=local,src=/tmp/.buildx-cache
@@ -126,16 +149,18 @@ jobs:
           sudo chmod -R 777 /mnt/tmpdir
           cd /mnt/tmpdir
           pip3 install "docker-copyedit<1.5"
-          srcTag=nyamisty/docker-wine-dotnet:${{ matrix.wine_arch }}-${{ matrix.wine_branch }}-${{ steps.wine_ver.outputs.value }}-${{ steps.timestamp.outputs.value }}
-          dstTag=nyamisty/docker-wine-dotnet:${{ matrix.wine_arch }}-${{ matrix.wine_branch }}-${{ steps.wine_ver.outputs.value }}-${{ steps.timestamp.outputs.value }}-noports
+          srcTag=${{ steps.repo.outputs.value }}:${{ matrix.wine_arch }}-${{ matrix.wine_branch }}-${{ steps.wine_ver.outputs.value }}-${{ steps.timestamp.outputs.value }}
+          dstTag=${{ steps.repo.outputs.value }}:${{ matrix.wine_arch }}-${{ matrix.wine_branch }}-${{ steps.wine_ver.outputs.value }}-${{ steps.timestamp.outputs.value }}-noports
           docker-copyedit.py FROM $srcTag INTO $dstTag -vv remove all ports
-          docker tag $dstTag nyamisty/docker-wine-dotnet:${{ matrix.wine_arch }}-noports
-          docker tag $dstTag nyamisty/docker-wine-dotnet:${{ matrix.wine_arch }}-${{ matrix.wine_branch }}-noports
-          docker tag $dstTag nyamisty/docker-wine-dotnet:${{ matrix.wine_arch }}-${{ matrix.wine_branch }}-${{ steps.wine_ver.outputs.value }}-noports
-          docker push $dstTag
-          docker push nyamisty/docker-wine-dotnet:${{ matrix.wine_arch }}-noports
-          docker push nyamisty/docker-wine-dotnet:${{ matrix.wine_arch }}-${{ matrix.wine_branch }}-noports
-          docker push nyamisty/docker-wine-dotnet:${{ matrix.wine_arch }}-${{ matrix.wine_branch }}-${{ steps.wine_ver.outputs.value }}-noports
+          docker tag $dstTag ${{ steps.repo.outputs.value }}:${{ matrix.wine_arch }}-noports
+          docker tag $dstTag ${{ steps.repo.outputs.value }}:${{ matrix.wine_arch }}-${{ matrix.wine_branch }}-noports
+          docker tag $dstTag ${{ steps.repo.outputs.value }}:${{ matrix.wine_arch }}-${{ matrix.wine_branch }}-${{ steps.wine_ver.outputs.value }}-noports
+          if ![[ "$DEBUG" == "" ]]; then # do not push docker during debug
+            docker push $dstTag
+            docker push ${{ steps.repo.outputs.value }}:${{ matrix.wine_arch }}-noports
+            docker push ${{ steps.repo.outputs.value }}:${{ matrix.wine_arch }}-${{ matrix.wine_branch }}-noports
+            docker push ${{ steps.repo.outputs.value }}:${{ matrix.wine_arch }}-${{ matrix.wine_branch }}-${{ steps.wine_ver.outputs.value }}-noports
+          fi
 
       -
         name: Image digest
